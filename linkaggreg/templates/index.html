@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <title>Agregador de Links</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <script>
+        // Remover mensagens após 5s
+        setTimeout(() => {
+            document.querySelectorAll(".flashes").forEach(el => el.remove());
+        }, 5000);
+    </script>
+</head>
+<body>
+    {% include "menu.html" %}
+
+    {% with messages = get_flashed_messages(with_categories=true) %}
+    {% if messages %}
+        <ul class="flashes">
+        {% for category, message in messages %}
+            <li class="{{ category }}">{{ message }}</li>
+        {% endfor %}
+        </ul>
+    {% endif %}
+    {% endwith %}
+
+    {% if not logged_in %}
+        <!-- <p class="no-links">Faça login para visualizar ou inserir links.</p>-->
+            <div class="cards">
+                {% for link in links %}
+                    <div class="card">
+                        <h3>{{ link.title }}</h3>
+                        <p>{{ link.description }}</p>
+                        <p><a href="{{ link.url }}" target="_blank">{{ link.url }}</a></p>
+                        {% if link.qrcode_image %}
+                        <div class="card-image">
+                            <img src="{{ url_for('static', filename=link.qrcode_image) }}" alt="QR Code">
+                        </div>
+                        {% endif %}
+                        <p class="created-at">Criado em {{ link.created_at.strftime('%d/%m/%Y %H:%M') }}</p>
+                        {% if admin %}
+                        <a class="delete-btn" href="{{ url_for('delete_link', link_id=link.id) }}">Excluir</a>
+                        {% endif %}
+                    </div>
+                {% endfor %}
+            </div>
+    {% else %}
+        {% if links|length == 0 %}
+            <p class="no-links">
+                Nenhum link cadastrado ainda.<br>
+                Clique em <strong>Adicionar Link</strong> no menu para começar.
+            </p>
+        {% else %}
+            <div class="cards">
+                {% for link in links %}
+                <div class="card">
+                    <h3>{{ link.title }}</h3>
+                    <p>{{ link.description }}</p>
+                    <p><a href="{{ link.url }}" target="_blank">{{ link.url }}</a></p>
+                    {% if link.qrcode_image %}
+                    <div class="card-image">
+                        <img src="{{ url_for('static', filename=link.qrcode_image) }}" alt="QR Code">
+                    </div>
+                    {% endif %}
+                    <p class="created-at">Criado em {{ link.created_at.strftime('%d/%m/%Y %H:%M') }}</p>
+                    {% if admin %}
+                    <a class="delete-btn" href="{{ url_for('delete_link', link_id=link.id) }}">Excluir</a>
+                    {% endif %}
+                </div>
+                {% endfor %}
+            </div>
+        {% endif %}
+    {% endif %}
+
+
+    {% include "rodape.html" %}
+</body>
+</html>

@@ -1,0 +1,15 @@
+<nav>
+    <ul class="menu">
+        <li><a href="{{ url_for('index') }}">Home</a></li>
+        {% if not logged_in %}
+            <li><a href="{{ url_for('login') }}">Login</a></li>
+            <!--<li><a href="{{ url_for('register') }}">Registrar</a></li>-->
+        {% else %}
+            {% if admin %}
+                <li><a href="{{ url_for('add_link') }}">Adicionar Link</a></li>
+            {% endif %}
+            <li><span class="user-info">{{ user }}</span></li>
+            <li><a href="{{ url_for('logout') }}">Logout</a></li>
+        {% endif %}
+    </ul>
+</nav>

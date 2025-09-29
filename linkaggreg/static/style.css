@@ -1,0 +1,204 @@
+/* ===== Geral ===== */
+html, body {
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    height: 100%;
+    background-color: #f4f6f8;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+}
+
+/* ===== Menu ===== */
+nav {
+    width: 100%;
+    background-color: #164194;
+    position: sticky;
+    top: 0;
+    z-index: 1000;
+    box-shadow: 0 2px 6px rgba(0,0,0,0.15);
+}
+nav ul.menu {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    justify-content: center;
+    flex-wrap: wrap;
+}
+nav ul.menu li {
+    margin: 5px 15px;
+}
+nav ul.menu li a, .user-info {
+    display: block;
+    padding: 12px 20px;
+    color: #fff;
+    font-weight: 600;
+    text-decoration: none;
+    border-radius: 8px;
+}
+nav ul.menu li a:hover {
+    background-color: #008BD2;
+}
+
+/* ===== Flash Messages ===== */
+.flashes {
+    max-width: 800px;
+    margin: 20px auto;
+    padding: 0;
+    transition: opacity 0.5s ease;
+}
+.flashes li {
+    list-style: none;
+    padding: 12px 20px;
+    margin-bottom: 12px;
+    border-radius: 8px;
+    color: #fff;
+    text-align: center;
+    font-weight: bold;
+}
+.flashes .success { background-color: #52AE32; }
+.flashes .danger  { background-color: #E84910; }
+.flashes .warning { background-color: #ffc107; color: #333; }
+.flashes .info    { background-color: #008BD2; }
+
+/* ===== Cards ===== */
+.cards {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 20px;
+    padding: 20px;
+}
+.card {
+    width: 280px;
+    min-height: 340px;
+    background-color: #fff;
+    border-radius: 12px;
+    box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+    display: flex;
+    flex-direction: column;
+    padding: 15px;
+    text-align: center;
+    overflow: hidden;
+}
+.card h3 {
+    color: #164194;
+    margin: 10px 0;
+    font-size: 16px;
+}
+.card p {
+    font-size: 14px;
+    color: #555;
+    /* antes: apenas overflow e text-overflow */
+    /* overflow: hidden; */
+    /* text-overflow: ellipsis; */
+
+    /* agora: limita a 3 linhas */
+    overflow: hidden;
+    text-overflow: ellipsis;
+    display: -webkit-box;        /* NOVO */
+    -webkit-line-clamp: 3;       /* NOVO - máximo 3 linhas */
+    -webkit-box-orient: vertical;/* NOVO */
+}
+.card a {
+    color: #008BD2;
+    text-decoration: none;
+    font-weight: bold;
+    /* antes: só word-break */
+    /* word-break: break-word; */
+
+    /* agora: quebra inteligente + evita estouro */
+    word-break: break-word;      /* mantido */
+    overflow-wrap: break-word;   /* NOVO */
+    display: block;              /* NOVO */
+    margin-bottom: 10px;         /* NOVO */
+}
+.card a:hover {
+    text-decoration: underline;
+}
+.card-image {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin: 10px 0;
+}
+.card-image img {
+    /* antes: max-width: 100%; max-height: 120px; */
+    /* max-width: 100%; */
+    /* max-height: 120px; */
+
+    /* agora: tamanho controlado */
+    max-width: 140px;            /* ALTERADO */
+    max-height: 140px;           /* ALTERADO */
+    object-fit: contain;
+}
+.delete-btn {
+    font-size: 12px;
+    color: #E84910;
+    text-decoration: none;
+}
+.delete-btn:hover {
+    text-decoration: underline;
+}
+
+/* ===== Formulários ===== */
+.form-container {
+    max-width: 400px;
+    margin: 30px auto;
+    background-color: #fff;
+    padding: 20px 25px;
+    border-radius: 12px;
+    box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+    text-align: left;
+}
+.form-container label {
+    display: block;
+    margin-bottom: 5px;
+    font-weight: 600;
+}
+.form-container input, .form-container textarea {
+    width: 100%;
+    padding: 10px 12px;
+    margin-bottom: 15px;
+    border: 1px solid #ccc;
+    border-radius: 8px;
+}
+.form-container button {
+    width: 100%;
+    padding: 12px;
+    background-color: #52AE32;
+    color: #fff;
+    font-weight: 600;
+    border: none;
+    border-radius: 8px;
+    cursor: pointer;
+}
+.form-container button:hover {
+    background-color: #3b8124;
+}
+
+/* ===== Rodapé ===== */
+footer {
+    margin-top: auto;
+    background-color: #164194;
+    color: #fff;
+    text-align: center;
+    padding: 8px 0;
+    font-size: 14px;
+}
+
+/* ===== Mensagem quando não há links ===== */
+.no-links {
+    font-size: 18px;
+    color: #555;
+    margin: 40px auto;
+    text-align: center;
+    max-width: 600px;
+    line-height: 1.5;
+    background: #fff;
+    padding: 20px 30px;
+    border-radius: 10px;
+    box-shadow: 0 2px 6px rgba(0,0,0,0.1);
+}

@@ -96,7 +96,7 @@ def register():
 
         flash("Cadastro realizado! Faça login.", "success")
         return redirect(url_for("login"))
-
+    #Rota para registrar usuario desativada
     #return render_template("register.html")
 
 

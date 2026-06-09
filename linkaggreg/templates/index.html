@@ -2,16 +2,16 @@
 <html lang="pt-BR">
 <head>
     <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Agregador de Links</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
     <script>
-        // Remover mensagens após 5s
         setTimeout(() => {
             document.querySelectorAll(".flashes").forEach(el => el.remove());
         }, 5000);
     </script>
 </head>
-<body>
+<body class="{% if tv_mode %}tv-mode{% endif %}">
     {% include "menu.html" %}
 
     {% with messages = get_flashed_messages(with_categories=true) %}
@@ -24,54 +24,39 @@
     {% endif %}
     {% endwith %}
 
-    {% if not logged_in %}
-        <!-- <p class="no-links">Faça login para visualizar ou inserir links.</p>-->
-            <div class="cards">
-                {% for link in links %}
-                    <div class="card">
-                        <h3>{{ link.title }}</h3>
-                        <p>{{ link.description }}</p>
-                        <p><a href="{{ link.url }}" target="_blank">{{ link.url }}</a></p>
-                        {% if link.qrcode_image %}
-                        <div class="card-image">
-                            <img src="{{ url_for('static', filename=link.qrcode_image) }}" alt="QR Code">
-                        </div>
-                        {% endif %}
-                        <p class="created-at">Criado em {{ link.created_at.strftime('%d/%m/%Y %H:%M') }}</p>
-                        {% if admin %}
-                        <a class="delete-btn" href="{{ url_for('delete_link', link_id=link.id) }}">Excluir</a>
-                        {% endif %}
-                    </div>
-                {% endfor %}
-            </div>
+    {% if links|length == 0 %}
+        <p class="no-links">
+            Nenhum link cadastrado ainda.<br>
+            {% if can_edit %}Clique em <strong>Adicionar Link</strong> no menu para começar.{% endif %}
+        </p>
     {% else %}
-        {% if links|length == 0 %}
-            <p class="no-links">
-                Nenhum link cadastrado ainda.<br>
-                Clique em <strong>Adicionar Link</strong> no menu para começar.
-            </p>
-        {% else %}
-            <div class="cards">
-                {% for link in links %}
-                <div class="card">
-                    <h3>{{ link.title }}</h3>
-                    <p>{{ link.description }}</p>
-                    <p><a href="{{ link.url }}" target="_blank">{{ link.url }}</a></p>
-                    {% if link.qrcode_image %}
-                    <div class="card-image">
-                        <img src="{{ url_for('static', filename=link.qrcode_image) }}" alt="QR Code">
-                    </div>
-                    {% endif %}
-                    <p class="created-at">Criado em {{ link.created_at.strftime('%d/%m/%Y %H:%M') }}</p>
-                    {% if admin %}
-                    <a class="delete-btn" href="{{ url_for('delete_link', link_id=link.id) }}">Excluir</a>
-                    {% endif %}
+        <div class="cards">
+            {% for link in links %}
+            <div class="card">
+                <h3>{{ link.title }}</h3>
+                <p>{{ link.description }}</p>
+                <p><a href="{{ link.url }}" target="_blank">{{ link.url }}</a></p>
+                {% if link.qrcode_image %}
+                <div class="card-image">
+                    <img src="{{ url_for('static', filename=link.qrcode_image) }}" alt="QR Code">
                 </div>
-                {% endfor %}
+                {% endif %}
+                <p class="created-at">Criado em {{ link.created_at|datetime_br }}</p>
+                {% if link.expires_at %}
+                    <p class="validade-link">Válido até {{ link.expires_at|datetime_br }}</p>
+                {% else %}
+                    <p class="validade-link validade-sem-limite">Sem validade definida</p>
+                {% endif %}
+                {% if can_edit %}
+                <div class="card-actions">
+                    <a class="edit-btn" href="{{ url_for('edit_link', link_id=link.id) }}">Editar</a>
+                    <a class="delete-btn" href="{{ url_for('delete_link', link_id=link.id) }}" onclick="return confirm('Excluir este link?');">Excluir</a>
+                </div>
+                {% endif %}
             </div>
-        {% endif %}
+            {% endfor %}
+        </div>
     {% endif %}
-
 
     {% include "rodape.html" %}
 </body>

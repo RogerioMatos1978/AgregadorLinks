@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% if usuario %}Editar Usuário{% else %}Novo Usuário{% endif %}</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+    {% include "menu.html" %}
+
+    {% with messages = get_flashed_messages(with_categories=true) %}
+    {% if messages %}
+        <ul class="flashes">
+        {% for category, message in messages %}
+            <li class="{{ category }}">{{ message }}</li>
+        {% endfor %}
+        </ul>
+    {% endif %}
+    {% endwith %}
+
+    <div class="form-container">
+        <h2>{% if usuario %}Editar Usuário{% else %}Novo Usuário{% endif %}</h2>
+        <form method="post">
+            <label for="email">E-mail</label>
+            <input type="email" name="email" value="{{ usuario.email if usuario else '' }}" required>
+
+            <label for="password">Senha{% if usuario %} (deixe em branco para manter){% endif %}</label>
+            <input type="password" name="password" {% if not usuario %}required{% endif %}>
+
+            <label for="role">Nível</label>
+            <select name="role" required>
+                <option value="admin" {% if usuario and usuario.role == 'admin' %}selected{% endif %}>Admin / Editor</option>
+                <option value="viewer" {% if not usuario or usuario.role == 'viewer' %}selected{% endif %}>Visualizador / TV</option>
+            </select>
+
+            <button type="submit">Salvar</button>
+        </form>
+    </div>
+
+    {% include "rodape.html" %}
+</body>
+</html>

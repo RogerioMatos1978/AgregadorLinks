@@ -202,3 +202,163 @@ footer {
     border-radius: 10px;
     box-shadow: 0 2px 6px rgba(0,0,0,0.1);
 }
+
+/* ===== Ações dos cards ===== */
+.card-actions {
+    display: flex;
+    justify-content: center;
+    gap: 12px;
+    margin-top: 8px;
+}
+.edit-btn {
+    font-size: 12px;
+    color: #164194;
+    text-decoration: none;
+    font-weight: bold;
+}
+.edit-btn:hover {
+    text-decoration: underline;
+}
+
+/* ===== Select ===== */
+.form-container select {
+    width: 100%;
+    padding: 10px 12px;
+    margin-bottom: 15px;
+    border: 1px solid #ccc;
+    border-radius: 8px;
+    background: #fff;
+}
+
+/* ===== Tabela de usuários ===== */
+.table-container {
+    width: 92%;
+    max-width: 900px;
+    margin: 30px auto;
+    background: #fff;
+    padding: 20px;
+    border-radius: 12px;
+    box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+    overflow-x: auto;
+}
+.table-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    margin-bottom: 16px;
+}
+.primary-link {
+    display: inline-block;
+    padding: 10px 14px;
+    background: #52AE32;
+    color: #fff;
+    border-radius: 8px;
+    text-decoration: none;
+    font-weight: bold;
+}
+.table-container table {
+    width: 100%;
+    border-collapse: collapse;
+}
+.table-container th,
+.table-container td {
+    border-bottom: 1px solid #e5e5e5;
+    text-align: left;
+    padding: 12px;
+}
+.table-container th {
+    color: #164194;
+}
+
+/* ===== Modo TV ===== */
+.tv-mode nav {
+    display: none;
+}
+.tv-mode .cards {
+    padding-top: 30px;
+}
+.tv-mode .card {
+    min-height: 360px;
+}
+.tv-mode .card h3 {
+    font-size: 20px;
+}
+.tv-mode footer {
+    font-size: 16px;
+}
+
+@media (max-width: 768px) {
+    nav ul.menu {
+        justify-content: flex-start;
+        overflow-x: auto;
+        flex-wrap: nowrap;
+        padding: 6px;
+    }
+    nav ul.menu li {
+        margin: 4px;
+        flex: 0 0 auto;
+    }
+    nav ul.menu li a, .user-info {
+        padding: 10px 12px;
+        font-size: 13px;
+        white-space: nowrap;
+    }
+    .cards {
+        padding: 14px;
+        gap: 14px;
+    }
+    .card {
+        width: 100%;
+        max-width: 420px;
+        min-height: auto;
+    }
+    .form-container {
+        width: calc(100% - 40px);
+        max-width: 420px;
+        padding: 18px;
+    }
+    .form-container input,
+    .form-container textarea,
+    .form-container select {
+        box-sizing: border-box;
+    }
+    .table-header {
+        flex-direction: column;
+        align-items: flex-start;
+    }
+}
+
+
+/* ===== Validade dos links ===== */
+.validade-link {
+    font-size: 12px;
+    color: #164194;
+    background: #eef4ff;
+    border-radius: 8px;
+    padding: 6px 8px;
+    margin: 6px 0 10px;
+    font-weight: 600;
+}
+.validade-sem-limite {
+    color: #52AE32;
+    background: #eef9ec;
+}
+.form-help {
+    display: block;
+    font-size: 12px;
+    color: #666;
+    margin-top: -10px;
+    margin-bottom: 15px;
+}
+.checkbox-line {
+    display: flex !important;
+    align-items: center;
+    gap: 8px;
+    margin: 5px 0 15px;
+    font-weight: 600;
+}
+.checkbox-line input {
+    width: auto !important;
+    margin: 0 !important;
+}

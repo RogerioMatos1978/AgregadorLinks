@@ -1,7 +1,11 @@
 <nav>
     <ul class="menu">
         <li><a href="{{ url_for('index') }}">Home</a></li>
-        <li><a href="{{ url_for('tv') }}">Modo TV</a></li>
+        <li> <a href="{{ url_for('tv') }}"
+                target="_blank"
+                 rel="noopener noreferrer">
+                📺 Modo TV
+    </a></li>
         {% if not logged_in %}
             <li><a href="{{ url_for('login') }}">Login</a></li>
         {% else %}

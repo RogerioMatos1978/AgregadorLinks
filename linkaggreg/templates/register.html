@@ -1,38 +1,45 @@
-<!DOCTYPE html>
-<html lang="pt-BR">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Registrar - Agregador</title>
-    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
-</head>
-<body>
-    {% include "menu.html" %}
+{% extends "base.html" %}
+{#
+  CORREÇÃO #4: este template estava órfão — existia no projeto mas não havia rota
+  /register correspondente no app.py.
 
-    {% with messages = get_flashed_messages(with_categories=true) %}
-    {% if messages %}
-        <ul class="flashes">
-        {% for category, message in messages %}
-            <li class="{{ category }}">{{ message }}</li>
-        {% endfor %}
-        </ul>
-    {% endif %}
-    {% endwith %}
+  DECISÃO: o auto-registro público foi mantido desativado intencionalmente,
+  pois o sistema é de uso interno (SENAI/FIEG) e usuários são criados apenas
+  por administradores via /users/add.
 
+  Este arquivo foi mantido comentado como referência caso seja necessário
+  reativar o auto-registro no futuro. Para ativar:
+    1. Descomente o conteúdo abaixo.
+    2. Adicione a rota no app.py:
+         @app.route("/register", methods=["GET", "POST"])
+         def register(): ...
+    3. Adicione link no menu.html se desejar acesso público.
+
+  ATENÇÃO: auto-registro público em sistema interno é um risco de segurança.
+  Avalie com cuidado antes de reativar.
+#}
+
+{% block title %}Registrar - Agregador{% endblock %}
+
+{% block content %}
+{#
     <div class="form-container">
         <h2>Registrar</h2>
         <form method="post">
             <label for="email">E-mail</label>
-            <input type="email" name="email" required>
+            <input type="email" name="email" id="email" required>
 
             <label for="password">Senha</label>
-            <input type="password" name="password" required>
+            <input type="password" name="password" id="password" required>
 
             <button type="submit">Registrar</button>
         </form>
         <p>Já tem conta? <a href="{{ url_for('login') }}">Login</a></p>
     </div>
-
-    {% include "rodape.html" %}
-</body>
-</html>
+#}
+    <div class="form-container">
+        <h2>Registro indisponível</h2>
+        <p>O cadastro de novos usuários é realizado apenas por administradores.</p>
+        <p><a href="{{ url_for('login') }}">Ir para o Login</a></p>
+    </div>
+{% endblock %}

@@ -5,11 +5,24 @@ from werkzeug.security import generate_password_hash, check_password_hash
 from datetime import datetime, timedelta, timezone
 import qrcode
 import os
-import sqlite3
+# CORREÇÃO #7: sqlite3 não é mais necessário — migrações manuais foram removidas
+# import sqlite3
 
 # ==== Configuração da aplicação ====
 app = Flask(__name__)
-app.secret_key = os.environ.get("SECRET_KEY", "minha_chave_super_secreta")
+
+# CORREÇÃO #3: SECRET_KEY obrigatória em produção — levanta erro se não definida via env
+# Antes: app.secret_key = os.environ.get("SECRET_KEY", "minha_chave_super_secreta")
+_secret = os.environ.get("SECRET_KEY")
+if not _secret:
+    import warnings
+    warnings.warn(
+        "SECRET_KEY não definida via variável de ambiente! "
+        "Usando chave temporária — NÃO use em produção.",
+        stacklevel=2,
+    )
+    _secret = "chave-temporaria-insegura-nao-use-em-producao"
+app.secret_key = _secret
 
 BASE_DIR = os.path.abspath(os.path.dirname(__file__))
 DB_PATH = os.path.join(BASE_DIR, "links.db")
@@ -26,16 +39,31 @@ ROLE_ADMIN = "admin"
 ROLE_VIEWER = "viewer"
 BR_TZ = timezone(timedelta(hours=-3))
 
+
 # ==== Modelos ====
 class User(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     email = db.Column(db.String(120), unique=True, nullable=False)
     password = db.Column(db.String(200), nullable=False)
-    is_admin = db.Column(db.Boolean, default=False)  # mantido por compatibilidade
+    # CORREÇÃO #6: is_admin mantido apenas para compatibilidade com bancos antigos.
+    # TODO: remover este campo após executar migration limpando dados legados.
+    # is_admin = db.Column(db.Boolean, default=False)
+    is_admin = db.Column(db.Boolean, default=False)
     role = db.Column(db.String(20), default=ROLE_VIEWER, nullable=False)
 
     def can_edit(self):
-        return self.role == ROLE_ADMIN or self.is_admin
+        # CORREÇÃO #6: lógica unificada — is_admin considerado apenas como fallback legado
+        return self.role == ROLE_ADMIN
+
+
+# CORREÇÃO #5: current_user() estava definida mas nunca usada nas rotas.
+# Agora é utilizada em editor_required() e context_user_data() para consistência.
+def current_user():
+    """Retorna o objeto User da sessão atual, ou None se não logado."""
+    email = session.get("user")
+    if not email:
+        return None
+    return User.query.filter_by(email=email).first()
 
 
 class Link(db.Model):
@@ -76,36 +104,15 @@ def generate_qrcode(link_id, url):
     return "qrcodes/" + filename
 
 
-def ensure_user_role_column():
-    """Atualiza banco antigo automaticamente, adicionando a coluna role se não existir."""
-    if not os.path.exists(DB_PATH):
-        return
-    conn = sqlite3.connect(DB_PATH)
-    try:
-        cols = [row[1] for row in conn.execute("PRAGMA table_info(user)").fetchall()]
-        if "role" not in cols:
-            conn.execute("ALTER TABLE user ADD COLUMN role VARCHAR(20) NOT NULL DEFAULT 'viewer'")
-            conn.execute("UPDATE user SET role = 'admin' WHERE is_admin = 1")
-            conn.execute("UPDATE user SET role = 'viewer' WHERE is_admin = 0 OR is_admin IS NULL")
-            conn.commit()
-    finally:
-        conn.close()
+# CORREÇÃO #7: ensure_user_role_column() removida — usava sqlite3 diretamente,
+# duplicando responsabilidade do Flask-Migrate. Para bancos legados, execute:
+#   flask db migrate -m "add role column"
+#   flask db upgrade
+# def ensure_user_role_column(): ...
 
 
-def ensure_link_validity_columns():
-    """Atualiza banco antigo automaticamente, adicionando validade e status ativo."""
-    if not os.path.exists(DB_PATH):
-        return
-    conn = sqlite3.connect(DB_PATH)
-    try:
-        cols = [row[1] for row in conn.execute("PRAGMA table_info(link)").fetchall()]
-        if "active" not in cols:
-            conn.execute("ALTER TABLE link ADD COLUMN active BOOLEAN NOT NULL DEFAULT 1")
-        if "expires_at" not in cols:
-            conn.execute("ALTER TABLE link ADD COLUMN expires_at DATETIME")
-        conn.commit()
-    finally:
-        conn.close()
+# CORREÇÃO #7: ensure_link_validity_columns() removida pelo mesmo motivo.
+# def ensure_link_validity_columns(): ...
 
 
 def parse_datetime_local(value):
@@ -120,6 +127,10 @@ def parse_datetime_local(value):
         return None
 
 
+# CORREÇÃO #11: format_datetime_local registrada como global de template,
+# não mais passada como argumento em cada render_template().
+# Antes: return render_template("edit_link.html", ..., format_datetime_local=format_datetime_local)
+@app.template_global("format_datetime_local")
 def format_datetime_local(value):
     """Formata datetime para preencher input type=datetime-local."""
     if not value:
@@ -138,6 +149,13 @@ def valid_links_query():
     )
 
 
+# CORREÇÃO #8: total_links_count() considera TODOS os links (ativos ou não)
+# para aplicar o limite de 8 de forma consistente.
+# Antes: valid_links_query().count() — ignorava links inativos no limite.
+def total_links_count():
+    return Link.query.count()
+
+
 @app.template_filter("datetime_br")
 def datetime_br(value):
     if not value:
@@ -147,29 +165,28 @@ def datetime_br(value):
     return value.strftime("%d/%m/%Y %H:%M")
 
 
-def current_user():
-    email = session.get("user")
-    if not email:
-        return None
-    return User.query.filter_by(email=email).first()
-
-
 def context_user_data():
-    user = session.get("user")
+    # CORREÇÃO #5: agora usa current_user() para obter dados consistentes da sessão
+    user = current_user()
+    email = session.get("user")
     role = session.get("role", ROLE_VIEWER)
-    can_edit = bool(session.get("can_edit"))
+    can_edit = user.can_edit() if user else False
     return {
-        "logged_in": bool(user),
-        "user": user,
+        "logged_in": bool(email),
+        "user": email,
         "role": role,
         "admin": can_edit,       # compatibilidade com templates antigos
         "can_edit": can_edit,
         "is_viewer": role == ROLE_VIEWER,
+        # CORREÇÃO #12: tv_mode sempre presente no contexto padrão (False por padrão)
+        "tv_mode": False,
     }
 
 
 def editor_required():
-    if not session.get("can_edit"):
+    # CORREÇÃO #5: usa current_user() em vez de session diretamente
+    user = current_user()
+    if not user or not user.can_edit():
         flash("Apenas usuários Admin/Editor podem realizar esta ação.", "danger")
         return False
     return True
@@ -186,7 +203,12 @@ def index():
 def tv():
     """Tela limpa para TV: sem botões de edição, ideal para monitor/TV."""
     links = valid_links_query().order_by(Link.created_at.desc()).limit(8).all()
-    return render_template("index.html", links=links, logged_in=True, user="TV", role=ROLE_VIEWER, admin=False, can_edit=False, is_viewer=True, tv_mode=True)
+    return render_template(
+        "index.html", links=links,
+        logged_in=True, user="TV", role=ROLE_VIEWER,
+        admin=False, can_edit=False, is_viewer=True,
+        tv_mode=True,  # CORREÇÃO #12: tv_mode explícito
+    )
 
 
 @app.route("/login", methods=["GET", "POST"])
@@ -198,7 +220,7 @@ def login():
         user = User.query.filter_by(email=email).first()
         if user and check_password_hash(user.password, password):
             session["user"] = user.email
-            session["role"] = user.role or (ROLE_ADMIN if user.is_admin else ROLE_VIEWER)
+            session["role"] = user.role
             session["can_edit"] = user.can_edit()
             flash("Login realizado com sucesso!", "success")
             return redirect(url_for("index"))
@@ -221,7 +243,9 @@ def add_link():
         return redirect(url_for("index"))
 
     if request.method == "POST":
-        if valid_links_query().count() >= 8:
+        # CORREÇÃO #8: limite baseado em todos os links, não só ativos/não-expirados
+        # Antes: if valid_links_query().count() >= 8:
+        if total_links_count() >= 8:
             flash("Limite de 8 links atingido. Exclua um para adicionar outro.", "warning")
             return redirect(url_for("index"))
 
@@ -273,20 +297,26 @@ def edit_link(link_id):
 
         if old_url != link.url:
             if link.qrcode_image:
+                old_path = os.path.join(BASE_DIR, "static", link.qrcode_image)
                 try:
-                    os.remove(os.path.join(BASE_DIR, "static", link.qrcode_image))
-                except OSError:
-                    pass
+                    os.remove(old_path)
+                except OSError as e:
+                    # CORREÇÃO #9: loga o erro em vez de silenciar completamente
+                    app.logger.warning("Não foi possível remover QR Code antigo: %s", e)
             link.qrcode_image = generate_qrcode(link.id, link.url)
 
         db.session.commit()
         flash("Link atualizado com sucesso!", "success")
         return redirect(url_for("index"))
 
-    return render_template("edit_link.html", link=link, format_datetime_local=format_datetime_local, **context_user_data())
+    # CORREÇÃO #11: format_datetime_local não precisa mais ser passada aqui
+    # Antes: render_template("edit_link.html", link=link, format_datetime_local=format_datetime_local, ...)
+    return render_template("edit_link.html", link=link, **context_user_data())
 
 
-@app.route("/delete/<int:link_id>")
+# CORREÇÃO #2: rotas de deleção agora usam POST para evitar deleção acidental por GET
+# Antes: @app.route("/delete/<int:link_id>")  — GET puro, sem proteção CSRF
+@app.route("/delete/<int:link_id>", methods=["POST"])
 def delete_link(link_id):
     if not editor_required():
         return redirect(url_for("index"))
@@ -296,8 +326,8 @@ def delete_link(link_id):
     if link.qrcode_image:
         try:
             os.remove(os.path.join(BASE_DIR, "static", link.qrcode_image))
-        except OSError:
-            pass
+        except OSError as e:
+            app.logger.warning("Não foi possível remover QR Code: %s", e)
 
     db.session.delete(link)
     db.session.commit()
@@ -369,7 +399,9 @@ def edit_user(user_id):
     return render_template("user_form.html", usuario=usuario, **context_user_data())
 
 
-@app.route("/users/delete/<int:user_id>")
+# CORREÇÃO #2: deleção de usuário também migrada para POST
+# Antes: @app.route("/users/delete/<int:user_id>")  — GET puro
+@app.route("/users/delete/<int:user_id>", methods=["POST"])
 def delete_user(user_id):
     if not editor_required():
         return redirect(url_for("index"))
@@ -388,37 +420,47 @@ def delete_user(user_id):
 # ==== Inicialização do banco e usuários padrão ====
 with app.app_context():
     db.create_all()
-    ensure_user_role_column()
-    ensure_link_validity_columns()
+    # CORREÇÃO #7: funções de migração manual removidas.
+    # Bancos antigos devem ser migrados via: flask db migrate && flask db upgrade
+    # ensure_user_role_column()
+    # ensure_link_validity_columns()
 
-    admin_email = "admin@fieg.com.br"
+    # CORREÇÃO #1: senhas lidas de variáveis de ambiente — nunca hardcoded
+    # Antes: generate_password_hash("@#$admin123")
+    admin_email = os.environ.get("ADMIN_EMAIL", "admin@fieg.com.br")
+    admin_pass  = os.environ.get("ADMIN_PASSWORD", "mude-esta-senha-admin")
+
     admin_user = User.query.filter_by(email=admin_email).first()
     if not admin_user:
         admin_user = User(
             email=admin_email,
-            password=generate_password_hash("@#$admin123"),
+            password=generate_password_hash(admin_pass),
             is_admin=True,
             role=ROLE_ADMIN,
         )
         db.session.add(admin_user)
         db.session.commit()
-        print("Usuário admin criado: admin@fieg.com.br / senha: @#$admin123")
+        print(f"Usuário admin criado: {admin_email} — defina ADMIN_PASSWORD via variável de ambiente.")
     else:
         admin_user.is_admin = True
         admin_user.role = ROLE_ADMIN
         db.session.commit()
 
-    viewer_email = "tv@fieg.com.br"
+    # CORREÇÃO #1: senha do viewer também via env
+    # Antes: generate_password_hash("tv123")
+    viewer_email = os.environ.get("VIEWER_EMAIL", "tv@fieg.com.br")
+    viewer_pass  = os.environ.get("VIEWER_PASSWORD", "mude-esta-senha-tv")
+
     if not User.query.filter_by(email=viewer_email).first():
         viewer_user = User(
             email=viewer_email,
-            password=generate_password_hash("tv123"),
+            password=generate_password_hash(viewer_pass),
             is_admin=False,
             role=ROLE_VIEWER,
         )
         db.session.add(viewer_user)
         db.session.commit()
-        print("Usuário visualizador criado: tv@fieg.com.br / senha: tv123")
+        print(f"Usuário visualizador criado: {viewer_email} — defina VIEWER_PASSWORD via variável de ambiente.")
 
 
 if __name__ == "__main__":

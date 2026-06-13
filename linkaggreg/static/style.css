@@ -90,29 +90,20 @@ nav ul.menu li a:hover {
 .card p {
     font-size: 14px;
     color: #555;
-    /* antes: apenas overflow e text-overflow */
-    /* overflow: hidden; */
-    /* text-overflow: ellipsis; */
-
-    /* agora: limita a 3 linhas */
     overflow: hidden;
     text-overflow: ellipsis;
-    display: -webkit-box;        /* NOVO */
-    -webkit-line-clamp: 3;       /* NOVO - máximo 3 linhas */
-    -webkit-box-orient: vertical;/* NOVO */
+    display: -webkit-box;
+    -webkit-line-clamp: 3;
+    -webkit-box-orient: vertical;
 }
 .card a {
     color: #008BD2;
     text-decoration: none;
     font-weight: bold;
-    /* antes: só word-break */
-    /* word-break: break-word; */
-
-    /* agora: quebra inteligente + evita estouro */
-    word-break: break-word;      /* mantido */
-    overflow-wrap: break-word;   /* NOVO */
-    display: block;              /* NOVO */
-    margin-bottom: 10px;         /* NOVO */
+    word-break: break-word;
+    overflow-wrap: break-word;
+    display: block;
+    margin-bottom: 10px;
 }
 .card a:hover {
     text-decoration: underline;
@@ -125,13 +116,8 @@ nav ul.menu li a:hover {
     margin: 10px 0;
 }
 .card-image img {
-    /* antes: max-width: 100%; max-height: 120px; */
-    /* max-width: 100%; */
-    /* max-height: 120px; */
-
-    /* agora: tamanho controlado */
-    max-width: 140px;            /* ALTERADO */
-    max-height: 140px;           /* ALTERADO */
+    max-width: 140px;
+    max-height: 140px;
     object-fit: contain;
 }
 .delete-btn {
@@ -140,6 +126,25 @@ nav ul.menu li a:hover {
     text-decoration: none;
 }
 .delete-btn:hover {
+    text-decoration: underline;
+}
+
+/*
+  CORREÇÃO #2: estilo para o botão de deleção via formulário POST.
+  Antes, a exclusão era feita por <a href="..."> (GET), o que não é seguro.
+  Agora usa <form method="post"><button>, estilizado para parecer igual ao link anterior.
+*/
+.delete-btn-form {
+    background: none;
+    border: none;
+    padding: 0;
+    cursor: pointer;
+    font-family: inherit;
+    font-size: 12px;
+    color: #E84910;
+    text-decoration: none;
+}
+.delete-btn-form:hover {
     text-decoration: underline;
 }
 
@@ -209,6 +214,7 @@ footer {
     justify-content: center;
     gap: 12px;
     margin-top: 8px;
+    align-items: center;
 }
 .edit-btn {
     font-size: 12px;
@@ -328,7 +334,6 @@ footer {
         align-items: flex-start;
     }
 }
-
 
 /* ===== Validade dos links ===== */
 .validade-link {

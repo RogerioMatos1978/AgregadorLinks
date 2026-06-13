@@ -1,0 +1,34 @@
+<!DOCTYPE html>
+<!--
+  CORREÇÃO #10: base.html criado para herança de templates Jinja2.
+  Antes: o bloco de flash messages era duplicado em cada template individualmente.
+  Agora: todos os templates estendem este base e herdam menu, flashes e rodapé.
+-->
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}Agregador de Links{% endblock %}</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    {% block head %}{% endblock %}
+</head>
+<body class="{% block body_class %}{% endblock %}">
+
+    {% include "menu.html" %}
+
+    <!-- Flash messages centralizadas — não precisam mais ser copiadas em cada template -->
+    {% with messages = get_flashed_messages(with_categories=true) %}
+    {% if messages %}
+        <ul class="flashes">
+        {% for category, message in messages %}
+            <li class="{{ category }}">{{ message }}</li>
+        {% endfor %}
+        </ul>
+    {% endif %}
+    {% endwith %}
+
+    {% block content %}{% endblock %}
+
+    {% include "rodape.html" %}
+</body>
+</html>

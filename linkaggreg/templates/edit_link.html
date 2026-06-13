@@ -1,38 +1,30 @@
-<!DOCTYPE html>
-<html lang="pt-BR">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Editar Link</title>
-    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
-</head>
-<body>
-    {% include "menu.html" %}
+{% extends "base.html" %}
+{#
+  CORREÇÃO #10: herda de base.html — flash messages e includes removidos daqui.
+  CORREÇÃO #11: format_datetime_local agora é um template_global registrado no app,
+  portanto disponível automaticamente — não precisa mais ser passado como argumento
+  no render_template().
+#}
 
-    {% with messages = get_flashed_messages(with_categories=true) %}
-    {% if messages %}
-        <ul class="flashes">
-        {% for category, message in messages %}
-            <li class="{{ category }}">{{ message }}</li>
-        {% endfor %}
-        </ul>
-    {% endif %}
-    {% endwith %}
+{% block title %}Editar Link{% endblock %}
 
+{% block content %}
     <div class="form-container">
         <h2>Editar Link</h2>
         <form method="post">
             <label for="title">Título</label>
-            <input type="text" name="title" value="{{ link.title }}" required>
+            <input type="text" name="title" id="title" value="{{ link.title }}" required>
 
             <label for="url">URL</label>
-            <input type="url" name="url" value="{{ link.url }}" required>
+            <input type="url" name="url" id="url" value="{{ link.url }}" required>
 
             <label for="description">Descrição</label>
-            <textarea name="description">{{ link.description or '' }}</textarea>
+            <textarea name="description" id="description">{{ link.description or '' }}</textarea>
 
             <label for="expires_at">Data de validade</label>
-            <input type="datetime-local" name="expires_at" value="{{ format_datetime_local(link.expires_at) }}">
+            {# format_datetime_local disponível como global de template — sem necessidade de passar no render #}
+            <input type="datetime-local" name="expires_at" id="expires_at"
+                   value="{{ format_datetime_local(link.expires_at) }}">
             <small class="form-help">Deixe em branco para o link não expirar.</small>
 
             <label class="checkbox-line">
@@ -43,7 +35,4 @@
             <button type="submit">Salvar Alterações</button>
         </form>
     </div>
-
-    {% include "rodape.html" %}
-</body>
-</html>
+{% endblock %}

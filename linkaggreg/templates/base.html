@@ -8,6 +8,9 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        {% if tv_mode %}
+             <meta http-equiv="refresh" content="30">
+        {% endif %}
     <title>{% block title %}Agregador de Links{% endblock %}</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
     {% block head %}{% endblock %}
@@ -28,6 +31,14 @@
     {% endwith %}
 
     {% block content %}{% endblock %}
+
+    {% if request.endpoint == 'index' or tv_mode %}
+        <script>
+            setInterval(function () {
+                window.location.reload();
+            }, 30000); // Atualiza a cada 30 segundos
+        </script>
+        {% endif %}
 
     {% include "rodape.html" %}
 </body>

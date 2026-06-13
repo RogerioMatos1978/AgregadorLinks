@@ -7,7 +7,15 @@
   em context_user_data()), eliminando risco de UndefinedError no Jinja2.
 #}
 
-{% block title %}Agregador de Links{% endblock %}
+{#% block title %}Agregador de Links{% endblock %#}
+
+{% block title %}
+    {% if tv_mode %}
+        TV - Agregador de Links
+    {% else %}
+        ADMIN - Agregador de Links
+    {% endif %}
+{% endblock %}
 
 {% block head %}
 <script>

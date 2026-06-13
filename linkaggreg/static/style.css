@@ -135,17 +135,22 @@ nav ul.menu li a:hover {
   Agora usa <form method="post"><button>, estilizado para parecer igual ao link anterior.
 */
 .delete-btn-form {
-    background: none;
+    background: transparent;
     border: none;
     padding: 0;
-    cursor: pointer;
-    font-family: inherit;
-    font-size: 12px;
+    margin: 0;
     color: #E84910;
+    font-size: 12px;
+    font-weight: bold;
+    font-family: inherit;
+    cursor: pointer;
     text-decoration: none;
+    transition: 0.2s;
 }
+
 .delete-btn-form:hover {
     text-decoration: underline;
+    color: #c62828;
 }
 
 /* ===== Formulários ===== */
@@ -366,4 +371,57 @@ footer {
 .checkbox-line input {
     width: auto !important;
     margin: 0 !important;
+}
+/* ===== Corrigir botões Editar / Excluir nos cards ===== */
+.card-actions {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    gap: 10px;
+    margin-top: 10px;
+}
+
+.card-actions form {
+    display: inline-flex;
+    margin: 0;
+    padding: 0;
+}
+
+.card-actions .edit-btn,
+.card-actions .delete-btn-form {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 70px;
+    height: 30px;
+    padding: 0 12px;
+    border-radius: 6px;
+    font-size: 12px;
+    font-weight: 600;
+    font-family: inherit;
+    text-decoration: none;
+    cursor: pointer;
+    margin: 0;
+    line-height: 1;
+}
+
+.card-actions .edit-btn {
+    background-color: #164194;
+    color: #fff;
+}
+
+.card-actions .edit-btn:hover {
+    background-color: #0f2f6d;
+    text-decoration: none;
+}
+
+.card-actions .delete-btn-form {
+    background-color: #E84910;
+    color: #fff;
+    border: none;
+}
+
+.card-actions .delete-btn-form:hover {
+    background-color: #c63b0d;
+    text-decoration: none;
 }

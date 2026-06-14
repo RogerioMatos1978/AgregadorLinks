@@ -5,6 +5,7 @@ from werkzeug.security import generate_password_hash, check_password_hash
 from datetime import datetime, timedelta, timezone
 import qrcode
 import os
+import sys
 # CORREÇÃO #7: sqlite3 não é mais necessário — migrações manuais foram removidas
 # import sqlite3
 
@@ -26,8 +27,30 @@ app.secret_key = _secret
 
 BASE_DIR = os.path.abspath(os.path.dirname(__file__))
 DB_PATH = os.path.join(BASE_DIR, "links.db")
-app.config["SQLALCHEMY_DATABASE_URI"] = "sqlite:///" + DB_PATH
+
+
+def get_database_uri():
+    """Retorna a URL do banco. Em producao, defina DATABASE_URL com PostgreSQL."""
+    database_url = os.environ.get("DATABASE_URL", "").strip()
+    if not database_url:
+        return "sqlite:///" + DB_PATH
+
+    # Algumas plataformas ainda fornecem postgres://, mas SQLAlchemy espera postgresql://.
+    if database_url.startswith("postgres://"):
+        database_url = database_url.replace("postgres://", "postgresql://", 1)
+
+    # Usa o driver psycopg 3 quando a URL nao informa um driver explicitamente.
+    if database_url.startswith("postgresql://"):
+        database_url = database_url.replace("postgresql://", "postgresql+psycopg://", 1)
+
+    return database_url
+
+
+app.config["SQLALCHEMY_DATABASE_URI"] = get_database_uri()
 app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
+app.config["SQLALCHEMY_ENGINE_OPTIONS"] = {
+    "pool_pre_ping": True,
+}
 
 db = SQLAlchemy(app)
 migrate = Migrate(app, db)
@@ -73,9 +96,9 @@ class Link(db.Model):
     description = db.Column(db.Text, nullable=True)
     qrcode_image = db.Column(db.String(200), nullable=True)
     active = db.Column(db.Boolean, default=True, nullable=False)
-    expires_at = db.Column(db.DateTime, nullable=True)  # Data/hora de validade no horário de Brasília
+    expires_at = db.Column(db.DateTime(timezone=True), nullable=True)  # Data/hora de validade no horário de Brasília
     created_at = db.Column(
-        db.DateTime,
+        db.DateTime(timezone=True),
         default=lambda: datetime.now(BR_TZ)  # Horário Brasília
     )
 
@@ -418,7 +441,12 @@ def delete_user(user_id):
 
 
 # ==== Inicialização do banco e usuários padrão ====
-with app.app_context():
+def is_flask_db_command():
+    return 'flask' in os.path.basename(sys.argv[0]).lower() and 'db' in sys.argv
+
+
+def initialize_database():
+    """Cria as tabelas e usuarios padrao quando o app inicia fora do Flask-Migrate."""
     db.create_all()
     # CORREÇÃO #7: funções de migração manual removidas.
     # Bancos antigos devem ser migrados via: flask db migrate && flask db upgrade
@@ -461,6 +489,11 @@ with app.app_context():
         db.session.add(viewer_user)
         db.session.commit()
         print(f"Usuário visualizador criado: {viewer_email} — defina VIEWER_PASSWORD via variável de ambiente.")
+
+
+if not is_flask_db_command():
+    with app.app_context():
+        initialize_database()
 
 
 if __name__ == "__main__":

@@ -1,11 +1,22 @@
 from flask import Flask, render_template, request, redirect, url_for, session, flash
 from flask_sqlalchemy import SQLAlchemy
 from flask_migrate import Migrate
+from flask_wtf import CSRFProtect
 from werkzeug.security import generate_password_hash, check_password_hash
 from datetime import datetime, timedelta, timezone
 import qrcode
 import os
 import sys
+
+# NOVO: carrega variáveis do arquivo .env automaticamente em desenvolvimento.
+# Em produção (Render, Railway, etc.) as variáveis já vêm do ambiente e o
+# python-dotenv simplesmente não encontra o arquivo — não há problema nisso.
+try:
+    from dotenv import load_dotenv
+    load_dotenv()
+except ImportError:
+    pass
+
 # CORREÇÃO #7: sqlite3 não é mais necessário — migrações manuais foram removidas
 # import sqlite3
 
@@ -24,6 +35,19 @@ if not _secret:
     )
     _secret = "chave-temporaria-insegura-nao-use-em-producao"
 app.secret_key = _secret
+
+# NOVO: modo debug controlado por variável de ambiente, nunca fixo no código.
+# O debugger interativo do Werkzeug permite execução remota de código — jamais
+# pode ficar ligado em um servidor acessível pela rede/internet.
+app.config["DEBUG"] = os.environ.get("FLASK_DEBUG", "false").strip().lower() in ("1", "true", "yes")
+
+# NOVO: reforço de segurança do cookie de sessão.
+# HTTPONLY: JavaScript não consegue ler o cookie (mitiga roubo de sessão via XSS).
+# SAMESITE=Lax: cookie não é enviado em requisições cross-site (mitiga CSRF).
+# SECURE: só habilite quando o site rodar atrás de HTTPS (defina COOKIE_SECURE=true).
+app.config["SESSION_COOKIE_HTTPONLY"] = True
+app.config["SESSION_COOKIE_SAMESITE"] = "Lax"
+app.config["SESSION_COOKIE_SECURE"] = os.environ.get("COOKIE_SECURE", "false").strip().lower() in ("1", "true", "yes")
 
 BASE_DIR = os.path.abspath(os.path.dirname(__file__))
 DB_PATH = os.path.join(BASE_DIR, "links.db")
@@ -55,6 +79,12 @@ app.config["SQLALCHEMY_ENGINE_OPTIONS"] = {
 db = SQLAlchemy(app)
 migrate = Migrate(app, db)
 
+# NOVO: proteção CSRF global. Toda rota POST/PUT/PATCH/DELETE passa a exigir
+# um token válido (campo csrf_token no formulário). Sem isso, um site malicioso
+# podia montar um form escondido apontando para /delete/<id> e, se a vítima
+# estivesse logada, o navegador enviava o cookie de sessão automaticamente.
+csrf = CSRFProtect(app)
+
 # Níveis:
 # admin  = editor do sistema: adiciona, edita e exclui links
 # viewer = visualizador: indicado para TV, apenas exibe os cards
@@ -70,7 +100,6 @@ class User(db.Model):
     password = db.Column(db.String(200), nullable=False)
     # CORREÇÃO #6: is_admin mantido apenas para compatibilidade com bancos antigos.
     # TODO: remover este campo após executar migration limpando dados legados.
-    # is_admin = db.Column(db.Boolean, default=False)
     is_admin = db.Column(db.Boolean, default=False)
     role = db.Column(db.String(20), default=ROLE_VIEWER, nullable=False)
 
@@ -152,7 +181,6 @@ def parse_datetime_local(value):
 
 # CORREÇÃO #11: format_datetime_local registrada como global de template,
 # não mais passada como argumento em cada render_template().
-# Antes: return render_template("edit_link.html", ..., format_datetime_local=format_datetime_local)
 @app.template_global("format_datetime_local")
 def format_datetime_local(value):
     """Formata datetime para preencher input type=datetime-local."""
@@ -174,7 +202,6 @@ def valid_links_query():
 
 # CORREÇÃO #8: total_links_count() considera TODOS os links (ativos ou não)
 # para aplicar o limite de 8 de forma consistente.
-# Antes: valid_links_query().count() — ignorava links inativos no limite.
 def total_links_count():
     return Link.query.count()
 
@@ -242,6 +269,9 @@ def login():
 
         user = User.query.filter_by(email=email).first()
         if user and check_password_hash(user.password, password):
+            # NOVO: previne fixação de sessão — descarta qualquer sessão antiga
+            # e gera um cookie de sessão novo no momento do login.
+            session.clear()
             session["user"] = user.email
             session["role"] = user.role
             session["can_edit"] = user.can_edit()
@@ -267,7 +297,6 @@ def add_link():
 
     if request.method == "POST":
         # CORREÇÃO #8: limite baseado em todos os links, não só ativos/não-expirados
-        # Antes: if valid_links_query().count() >= 8:
         if total_links_count() >= 8:
             flash("Limite de 8 links atingido. Exclua um para adicionar outro.", "warning")
             return redirect(url_for("index"))
@@ -287,9 +316,16 @@ def add_link():
         db.session.add(new_link)
         db.session.commit()
 
-        qrcode_path = generate_qrcode(new_link.id, url)
-        new_link.qrcode_image = qrcode_path
-        db.session.commit()
+        # NOVO: se a geração do QR Code falhar (ex.: disco cheio, permissão de
+        # pasta, URL problemática), o link continua salvo — apenas sem imagem —
+        # em vez de estourar um erro 500 depois que o registro já existe no banco.
+        try:
+            new_link.qrcode_image = generate_qrcode(new_link.id, url)
+            db.session.commit()
+        except Exception as e:
+            app.logger.warning("Falha ao gerar QR Code para o link %s: %s", new_link.id, e)
+            flash("Link adicionado, mas houve um problema ao gerar o QR Code.", "warning")
+            return redirect(url_for("index"))
 
         flash("Link adicionado com sucesso!", "success")
         return redirect(url_for("index"))
@@ -326,19 +362,21 @@ def edit_link(link_id):
                 except OSError as e:
                     # CORREÇÃO #9: loga o erro em vez de silenciar completamente
                     app.logger.warning("Não foi possível remover QR Code antigo: %s", e)
-            link.qrcode_image = generate_qrcode(link.id, link.url)
+            # NOVO: mesma proteção da rota /add — falha na geração não derruba a request.
+            try:
+                link.qrcode_image = generate_qrcode(link.id, link.url)
+            except Exception as e:
+                app.logger.warning("Falha ao gerar QR Code para o link %s: %s", link.id, e)
+                flash("Link atualizado, mas houve um problema ao gerar o novo QR Code.", "warning")
 
         db.session.commit()
         flash("Link atualizado com sucesso!", "success")
         return redirect(url_for("index"))
 
-    # CORREÇÃO #11: format_datetime_local não precisa mais ser passada aqui
-    # Antes: render_template("edit_link.html", link=link, format_datetime_local=format_datetime_local, ...)
     return render_template("edit_link.html", link=link, **context_user_data())
 
 
 # CORREÇÃO #2: rotas de deleção agora usam POST para evitar deleção acidental por GET
-# Antes: @app.route("/delete/<int:link_id>")  — GET puro, sem proteção CSRF
 @app.route("/delete/<int:link_id>", methods=["POST"])
 def delete_link(link_id):
     if not editor_required():
@@ -378,6 +416,11 @@ def add_user():
         if role not in (ROLE_ADMIN, ROLE_VIEWER):
             role = ROLE_VIEWER
 
+        # NOVO: senha mínima de 8 caracteres — antes qualquer valor não vazio era aceito.
+        if len(password) < 8:
+            flash("A senha deve ter pelo menos 8 caracteres.", "danger")
+            return redirect(url_for("add_user"))
+
         if User.query.filter_by(email=email).first():
             flash("E-mail já cadastrado.", "warning")
             return redirect(url_for("add_user"))
@@ -413,6 +456,10 @@ def edit_user(user_id):
 
         new_password = request.form.get("password", "").strip()
         if new_password:
+            # NOVO: mesma validação de senha mínima ao trocar a senha de um usuário existente.
+            if len(new_password) < 8:
+                flash("A senha deve ter pelo menos 8 caracteres.", "danger")
+                return redirect(url_for("edit_user", user_id=usuario.id))
             usuario.password = generate_password_hash(new_password)
 
         db.session.commit()
@@ -423,7 +470,6 @@ def edit_user(user_id):
 
 
 # CORREÇÃO #2: deleção de usuário também migrada para POST
-# Antes: @app.route("/users/delete/<int:user_id>")  — GET puro
 @app.route("/users/delete/<int:user_id>", methods=["POST"])
 def delete_user(user_id):
     if not editor_required():
@@ -450,11 +496,8 @@ def initialize_database():
     db.create_all()
     # CORREÇÃO #7: funções de migração manual removidas.
     # Bancos antigos devem ser migrados via: flask db migrate && flask db upgrade
-    # ensure_user_role_column()
-    # ensure_link_validity_columns()
 
     # CORREÇÃO #1: senhas lidas de variáveis de ambiente — nunca hardcoded
-    # Antes: generate_password_hash("@#$admin123")
     admin_email = os.environ.get("ADMIN_EMAIL", "admin@fieg.com.br")
     admin_pass  = os.environ.get("ADMIN_PASSWORD", "mude-esta-senha-admin")
 
@@ -475,7 +518,6 @@ def initialize_database():
         db.session.commit()
 
     # CORREÇÃO #1: senha do viewer também via env
-    # Antes: generate_password_hash("tv123")
     viewer_email = os.environ.get("VIEWER_EMAIL", "tv@fieg.com.br")
     viewer_pass  = os.environ.get("VIEWER_PASSWORD", "mude-esta-senha-tv")
 
@@ -497,4 +539,5 @@ if not is_flask_db_command():
 
 
 if __name__ == "__main__":
-    app.run(debug=True, port=5001)
+    # NOVO: debug/host controlados por ambiente — nunca hardcoded.
+    app.run(debug=app.config["DEBUG"], port=int(os.environ.get("PORT", 5001)))

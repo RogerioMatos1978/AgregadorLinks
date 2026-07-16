@@ -7,13 +7,16 @@
     <div class="form-container">
         <h2>{% if usuario %}Editar Usuário{% else %}Novo Usuário{% endif %}</h2>
         <form method="post">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
             <label for="email">E-mail</label>
             <input type="email" name="email" id="email"
                    value="{{ usuario.email if usuario else '' }}" required>
 
             <label for="password">Senha{% if usuario %} (deixe em branco para manter){% endif %}</label>
-            <input type="password" name="password" id="password"
+            <input type="password" name="password" id="password" minlength="8"
                    {% if not usuario %}required{% endif %}>
+            <small class="form-help">Mínimo de 8 caracteres.</small>
 
             <label for="role">Nível</label>
             <select name="role" id="role" required>

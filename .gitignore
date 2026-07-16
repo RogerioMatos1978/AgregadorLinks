@@ -1,0 +1,28 @@
+# Ambiente virtual
+venv/
+.venv/
+env/
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+
+# Segredos e configuração local — nunca commitar
+.env
+
+# Banco de dados local (contém hashes de senha reais depois do primeiro uso)
+linkaggreg/links.db
+*.db
+*.sqlite3
+
+# QR Codes gerados em runtime (recriados automaticamente pelo app)
+linkaggreg/static/qrcodes/*.png
+
+# IDEs
+.idea/
+.vscode/
+
+# Sistema operacional
+.DS_Store
+Thumbs.db

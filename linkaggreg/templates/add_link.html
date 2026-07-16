@@ -7,6 +7,8 @@
     <div class="form-container">
         <h2>Adicionar Link</h2>
         <form method="post">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
             <label for="title">Título</label>
             <input type="text" name="title" id="title" required>
 

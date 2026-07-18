@@ -9,9 +9,9 @@
         <form method="post">
             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
 
-            <label for="email">E-mail</label>
-            <input type="email" name="email" id="email"
-                   value="{{ usuario.email if usuario else '' }}" required>
+            <label for="username">Usuário</label>
+            <input type="text" name="username" id="username"
+                   value="{{ usuario.username if usuario else '' }}" required autocomplete="username">
 
             <label for="password">Senha{% if usuario %} (deixe em branco para manter){% endif %}</label>
             <input type="password" name="password" id="password" minlength="8"

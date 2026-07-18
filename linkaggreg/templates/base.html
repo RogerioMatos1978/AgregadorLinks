@@ -32,13 +32,20 @@
 
     {% block content %}{% endblock %}
 
-    {% if request.endpoint == 'index' or tv_mode %}
+    {#
+      NOVO: antes o modo TV recarregava a página duas vezes ao mesmo tempo —
+      pelo <meta http-equiv="refresh"> lá no <head> E por este setInterval.
+      Os dois faziam a mesma coisa (recarregar a cada 30s), então o JS só roda
+      agora quando NÃO é tv_mode (a página /index normal continua se
+      atualizando sozinha); o modo TV usa só o <meta refresh> do <head>.
+    #}
+    {% if request.endpoint == 'index' and not tv_mode %}
         <script>
             setInterval(function () {
                 window.location.reload();
             }, 30000); // Atualiza a cada 30 segundos
         </script>
-        {% endif %}
+    {% endif %}
 
     {% include "rodape.html" %}
 </body>

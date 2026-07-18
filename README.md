@@ -34,14 +34,29 @@ Defina principalmente `SECRET_KEY`, `ADMIN_PASSWORD` e `VIEWER_PASSWORD` com val
 python app.py
 ```
 
-O app inicia em `http://localhost:5001`. Por padrão cria dois usuários (se ainda não existirem): um admin (`ADMIN_EMAIL`/`ADMIN_PASSWORD`) e um visualizador (`VIEWER_EMAIL`/`VIEWER_PASSWORD`).
+O app inicia em `http://localhost:5001`. Por padrão cria dois usuários (se ainda não existirem): um admin (`ADMIN_USERNAME`/`ADMIN_PASSWORD`) e um visualizador (`VIEWER_USERNAME`/`VIEWER_PASSWORD`).
+
+## Rodar na rede local (para TVs e outros dispositivos)
+
+Para outros aparelhos da mesma rede acessarem o painel (ex.: uma Smart TV abrindo
+o modo `/tv`), use o Waitress em vez do servidor de desenvolvimento:
+
+```bash
+python serve.py
+```
+
+Isso escuta em `0.0.0.0` (toda a rede) na porta definida em `PORT`. Ainda é preciso
+fixar o IP do computador no roteador e liberar a porta no firewall do Windows — o
+passo a passo completo está em `PLANO-REDE.md`.
 
 ## Estrutura
 
 - `app.py` — aplicação Flask (rotas, modelos, autenticação)
+- `serve.py` — sobe o app com Waitress, para uso na rede local (ver acima)
 - `templates/` — páginas HTML (Jinja2)
 - `static/` — CSS e QR Codes gerados
 - `migrations/` — migrações de banco (Flask-Migrate/Alembic)
+- `tests/` — testes automatizados (pytest)
 
 ## Notas de segurança
 

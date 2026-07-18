@@ -2,6 +2,8 @@ from flask import Flask, render_template, request, redirect, url_for, session, f
 from flask_sqlalchemy import SQLAlchemy
 from flask_migrate import Migrate
 from flask_wtf import CSRFProtect
+from flask_limiter import Limiter
+from flask_limiter.util import get_remote_address
 from werkzeug.security import generate_password_hash, check_password_hash
 from datetime import datetime, timedelta, timezone
 import qrcode
@@ -23,23 +25,35 @@ except ImportError:
 # ==== Configuração da aplicação ====
 app = Flask(__name__)
 
-# CORREÇÃO #3: SECRET_KEY obrigatória em produção — levanta erro se não definida via env
-# Antes: app.secret_key = os.environ.get("SECRET_KEY", "minha_chave_super_secreta")
-_secret = os.environ.get("SECRET_KEY")
-if not _secret:
-    import warnings
-    warnings.warn(
-        "SECRET_KEY não definida via variável de ambiente! "
-        "Usando chave temporária — NÃO use em produção.",
-        stacklevel=2,
-    )
-    _secret = "chave-temporaria-insegura-nao-use-em-producao"
-app.secret_key = _secret
-
 # NOVO: modo debug controlado por variável de ambiente, nunca fixo no código.
 # O debugger interativo do Werkzeug permite execução remota de código — jamais
 # pode ficar ligado em um servidor acessível pela rede/internet.
-app.config["DEBUG"] = os.environ.get("FLASK_DEBUG", "false").strip().lower() in ("1", "true", "yes")
+# Calculado antes da checagem de SECRET_KEY abaixo, porque a checagem depende dele.
+_debug_mode = os.environ.get("FLASK_DEBUG", "false").strip().lower() in ("1", "true", "yes")
+app.config["DEBUG"] = _debug_mode
+
+# CORREÇÃO #3 (reforçada): SECRET_KEY obrigatória fora do modo de desenvolvimento.
+# Antes: se a variável não existisse, o app subia mesmo assim com um aviso e uma
+# chave insegura fixa — fácil de esquecer em produção. Agora, com FLASK_DEBUG=false
+# (o padrão), a ausência de SECRET_KEY interrompe a subida do app com um erro claro.
+# Em desenvolvimento local (FLASK_DEBUG=true) o fallback inseguro ainda é aceito,
+# só para não travar quem está apenas testando o projeto pela primeira vez.
+_secret = os.environ.get("SECRET_KEY")
+if not _secret:
+    if _debug_mode:
+        import warnings
+        warnings.warn(
+            "SECRET_KEY não definida via variável de ambiente! "
+            "Usando chave temporária — NÃO use em produção.",
+            stacklevel=2,
+        )
+        _secret = "chave-temporaria-insegura-nao-use-em-producao"
+    else:
+        raise RuntimeError(
+            "SECRET_KEY não definida. Copie .env.example para .env e defina uma "
+            "SECRET_KEY própria (ou rode com FLASK_DEBUG=true apenas para testes locais)."
+        )
+app.secret_key = _secret
 
 # NOVO: reforço de segurança do cookie de sessão.
 # HTTPONLY: JavaScript não consegue ler o cookie (mitiga roubo de sessão via XSS).
@@ -85,6 +99,17 @@ migrate = Migrate(app, db)
 # estivesse logada, o navegador enviava o cookie de sessão automaticamente.
 csrf = CSRFProtect(app)
 
+# NOVO: limite de tentativas no /login para dificultar ataques de força bruta.
+# storage_uri="memory://" é suficiente para um único processo/instância; em um
+# deploy com múltiplos workers, defina RATELIMIT_STORAGE_URI (ex.: Redis) para
+# que o limite seja compartilhado entre eles.
+limiter = Limiter(
+    key_func=get_remote_address,
+    app=app,
+    default_limits=[],
+    storage_uri=os.environ.get("RATELIMIT_STORAGE_URI", "memory://"),
+)
+
 # Níveis:
 # admin  = editor do sistema: adiciona, edita e exclui links
 # viewer = visualizador: indicado para TV, apenas exibe os cards
@@ -92,11 +117,28 @@ ROLE_ADMIN = "admin"
 ROLE_VIEWER = "viewer"
 BR_TZ = timezone(timedelta(hours=-3))
 
+# NOVO: limite de links configurável via variável de ambiente (antes fixo em 8
+# em dois lugares diferentes do código, o que exigia lembrar de trocar os dois).
+MAX_LINKS = int(os.environ.get("MAX_LINKS", "8"))
+
+# NOVO: só aceitamos links http/https. Sem essa checagem, um link salvo como
+# "javascript:alert(1)" ficaria gravado normalmente e executaria script no
+# navegador de quem clicasse nele — o campo type="url" do formulário é validação
+# só do lado do navegador e pode ser contornada por quem enviar o POST direto.
+ALLOWED_URL_SCHEMES = ("http://", "https://")
+
+
+def is_valid_url(url):
+    return url.lower().startswith(ALLOWED_URL_SCHEMES)
+
 
 # ==== Modelos ====
 class User(db.Model):
     id = db.Column(db.Integer, primary_key=True)
-    email = db.Column(db.String(120), unique=True, nullable=False)
+    # NOVO: login trocado de e-mail para usuário (nome de usuário simples,
+    # sem exigir formato de e-mail). Ver NOVIDADES.md para o histórico
+    # completo dessa mudança, inclusive a migration que renomeia a coluna.
+    username = db.Column(db.String(80), unique=True, nullable=False)
     password = db.Column(db.String(200), nullable=False)
     # CORREÇÃO #6: is_admin mantido apenas para compatibilidade com bancos antigos.
     # TODO: remover este campo após executar migration limpando dados legados.
@@ -112,10 +154,10 @@ class User(db.Model):
 # Agora é utilizada em editor_required() e context_user_data() para consistência.
 def current_user():
     """Retorna o objeto User da sessão atual, ou None se não logado."""
-    email = session.get("user")
-    if not email:
+    username = session.get("user")
+    if not username:
         return None
-    return User.query.filter_by(email=email).first()
+    return User.query.filter_by(username=username).first()
 
 
 class Link(db.Model):
@@ -218,12 +260,12 @@ def datetime_br(value):
 def context_user_data():
     # CORREÇÃO #5: agora usa current_user() para obter dados consistentes da sessão
     user = current_user()
-    email = session.get("user")
+    username = session.get("user")
     role = session.get("role", ROLE_VIEWER)
     can_edit = user.can_edit() if user else False
     return {
-        "logged_in": bool(email),
-        "user": email,
+        "logged_in": bool(username),
+        "user": username,
         "role": role,
         "admin": can_edit,       # compatibilidade com templates antigos
         "can_edit": can_edit,
@@ -245,14 +287,14 @@ def editor_required():
 # ==== Rotas ====
 @app.route("/")
 def index():
-    links = valid_links_query().order_by(Link.created_at.desc()).limit(8).all()
+    links = valid_links_query().order_by(Link.created_at.desc()).limit(MAX_LINKS).all()
     return render_template("index.html", links=links, **context_user_data())
 
 
 @app.route("/tv")
 def tv():
     """Tela limpa para TV: sem botões de edição, ideal para monitor/TV."""
-    links = valid_links_query().order_by(Link.created_at.desc()).limit(8).all()
+    links = valid_links_query().order_by(Link.created_at.desc()).limit(MAX_LINKS).all()
     return render_template(
         "index.html", links=links,
         logged_in=True, user="TV", role=ROLE_VIEWER,
@@ -262,23 +304,27 @@ def tv():
 
 
 @app.route("/login", methods=["GET", "POST"])
+# NOVO: no máximo 5 tentativas de login por minuto por IP. Passado esse limite,
+# o Flask-Limiter responde com HTTP 429 (Too Many Requests) automaticamente.
+@limiter.limit("5 per minute", methods=["POST"])
 def login():
     if request.method == "POST":
-        email = request.form["email"].strip().lower()
+        # NOVO: login por usuário em vez de e-mail.
+        username = request.form["username"].strip().lower()
         password = request.form["password"]
 
-        user = User.query.filter_by(email=email).first()
+        user = User.query.filter_by(username=username).first()
         if user and check_password_hash(user.password, password):
             # NOVO: previne fixação de sessão — descarta qualquer sessão antiga
             # e gera um cookie de sessão novo no momento do login.
             session.clear()
-            session["user"] = user.email
+            session["user"] = user.username
             session["role"] = user.role
             session["can_edit"] = user.can_edit()
             flash("Login realizado com sucesso!", "success")
             return redirect(url_for("index"))
         else:
-            flash("E-mail ou senha inválidos.", "danger")
+            flash("Usuário ou senha inválidos.", "danger")
 
     return render_template("login.html", **context_user_data())
 
@@ -297,8 +343,8 @@ def add_link():
 
     if request.method == "POST":
         # CORREÇÃO #8: limite baseado em todos os links, não só ativos/não-expirados
-        if total_links_count() >= 8:
-            flash("Limite de 8 links atingido. Exclua um para adicionar outro.", "warning")
+        if total_links_count() >= MAX_LINKS:
+            flash(f"Limite de {MAX_LINKS} links atingido. Exclua um para adicionar outro.", "warning")
             return redirect(url_for("index"))
 
         title = request.form["title"].strip()
@@ -310,6 +356,11 @@ def add_link():
 
         if expires_at_raw and not expires_at:
             flash("Data de validade inválida.", "danger")
+            return redirect(url_for("add_link"))
+
+        # NOVO: só aceita URL http/https (ver comentário em is_valid_url acima).
+        if not is_valid_url(url):
+            flash("URL inválida. Use um endereço iniciado por http:// ou https://.", "danger")
             return redirect(url_for("add_link"))
 
         new_link = Link(title=title, url=url, description=description, expires_at=expires_at, active=active)
@@ -352,6 +403,12 @@ def edit_link(link_id):
         if expires_at_raw and not expires_at:
             flash("Data de validade inválida.", "danger")
             return redirect(url_for("edit_link", link_id=link.id))
+
+        # NOVO: mesma validação de esquema usada em /add.
+        if not is_valid_url(link.url):
+            flash("URL inválida. Use um endereço iniciado por http:// ou https://.", "danger")
+            return redirect(url_for("edit_link", link_id=link.id))
+
         link.expires_at = expires_at
 
         if old_url != link.url:
@@ -400,7 +457,7 @@ def delete_link(link_id):
 def users():
     if not editor_required():
         return redirect(url_for("index"))
-    users_list = User.query.order_by(User.email.asc()).all()
+    users_list = User.query.order_by(User.username.asc()).all()
     return render_template("users.html", users=users_list, **context_user_data())
 
 
@@ -410,7 +467,8 @@ def add_user():
         return redirect(url_for("index"))
 
     if request.method == "POST":
-        email = request.form["email"].strip().lower()
+        # NOVO: cadastro por usuário em vez de e-mail.
+        username = request.form["username"].strip().lower()
         password = request.form["password"]
         role = request.form.get("role", ROLE_VIEWER)
         if role not in (ROLE_ADMIN, ROLE_VIEWER):
@@ -421,12 +479,12 @@ def add_user():
             flash("A senha deve ter pelo menos 8 caracteres.", "danger")
             return redirect(url_for("add_user"))
 
-        if User.query.filter_by(email=email).first():
-            flash("E-mail já cadastrado.", "warning")
+        if User.query.filter_by(username=username).first():
+            flash("Usuário já cadastrado.", "warning")
             return redirect(url_for("add_user"))
 
         user = User(
-            email=email,
+            username=username,
             password=generate_password_hash(password),
             role=role,
             is_admin=(role == ROLE_ADMIN),
@@ -447,7 +505,7 @@ def edit_user(user_id):
     usuario = User.query.get_or_404(user_id)
 
     if request.method == "POST":
-        usuario.email = request.form["email"].strip().lower()
+        usuario.username = request.form["username"].strip().lower()
         role = request.form.get("role", ROLE_VIEWER)
         if role not in (ROLE_ADMIN, ROLE_VIEWER):
             role = ROLE_VIEWER
@@ -476,7 +534,7 @@ def delete_user(user_id):
         return redirect(url_for("index"))
 
     usuario = User.query.get_or_404(user_id)
-    if usuario.email == session.get("user"):
+    if usuario.username == session.get("user"):
         flash("Você não pode excluir o usuário que está logado.", "warning")
         return redirect(url_for("users"))
 
@@ -497,40 +555,58 @@ def initialize_database():
     # CORREÇÃO #7: funções de migração manual removidas.
     # Bancos antigos devem ser migrados via: flask db migrate && flask db upgrade
 
-    # CORREÇÃO #1: senhas lidas de variáveis de ambiente — nunca hardcoded
-    admin_email = os.environ.get("ADMIN_EMAIL", "admin@fieg.com.br")
-    admin_pass  = os.environ.get("ADMIN_PASSWORD", "mude-esta-senha-admin")
+    # ============================================================
+    # NOVO: credenciais de TESTE local — nunca use estas senhas fora
+    # do seu computador. Ficam aqui comentadas só como referência rápida
+    # de quais usuários o app cria sozinho na primeira vez que sobe,
+    # caso você não defina as variáveis de ambiente abaixo:
+    #
+    #   usuário: admin   senha: admin12345    (papel: admin/editor)
+    #   usuário: tv      senha: tv12345678    (papel: visualizador)
+    #
+    # Para trocar esses valores, defina no seu .env:
+    #   ADMIN_USERNAME=admin
+    #   ADMIN_PASSWORD=admin12345
+    #   VIEWER_USERNAME=tv
+    #   VIEWER_PASSWORD=tv12345678
+    # ============================================================
 
-    admin_user = User.query.filter_by(email=admin_email).first()
+    # CORREÇÃO #1: senhas lidas de variáveis de ambiente — nunca hardcoded.
+    # NOVO: ADMIN_EMAIL/VIEWER_EMAIL viraram ADMIN_USERNAME/VIEWER_USERNAME
+    # (login por usuário em vez de e-mail).
+    admin_username = os.environ.get("ADMIN_USERNAME", "admin")
+    admin_pass = os.environ.get("ADMIN_PASSWORD", "admin12345")
+
+    admin_user = User.query.filter_by(username=admin_username).first()
     if not admin_user:
         admin_user = User(
-            email=admin_email,
+            username=admin_username,
             password=generate_password_hash(admin_pass),
             is_admin=True,
             role=ROLE_ADMIN,
         )
         db.session.add(admin_user)
         db.session.commit()
-        print(f"Usuário admin criado: {admin_email} — defina ADMIN_PASSWORD via variável de ambiente.")
+        print(f"Usuário admin criado: {admin_username} — defina ADMIN_PASSWORD via variável de ambiente.")
     else:
         admin_user.is_admin = True
         admin_user.role = ROLE_ADMIN
         db.session.commit()
 
     # CORREÇÃO #1: senha do viewer também via env
-    viewer_email = os.environ.get("VIEWER_EMAIL", "tv@fieg.com.br")
-    viewer_pass  = os.environ.get("VIEWER_PASSWORD", "mude-esta-senha-tv")
+    viewer_username = os.environ.get("VIEWER_USERNAME", "tv")
+    viewer_pass = os.environ.get("VIEWER_PASSWORD", "tv12345678")
 
-    if not User.query.filter_by(email=viewer_email).first():
+    if not User.query.filter_by(username=viewer_username).first():
         viewer_user = User(
-            email=viewer_email,
+            username=viewer_username,
             password=generate_password_hash(viewer_pass),
             is_admin=False,
             role=ROLE_VIEWER,
         )
         db.session.add(viewer_user)
         db.session.commit()
-        print(f"Usuário visualizador criado: {viewer_email} — defina VIEWER_PASSWORD via variável de ambiente.")
+        print(f"Usuário visualizador criado: {viewer_username} — defina VIEWER_PASSWORD via variável de ambiente.")
 
 
 if not is_flask_db_command():
@@ -539,5 +615,14 @@ if not is_flask_db_command():
 
 
 if __name__ == "__main__":
-    # NOVO: debug/host controlados por ambiente — nunca hardcoded.
-    app.run(debug=app.config["DEBUG"], port=int(os.environ.get("PORT", 5001)))
+    # NOVO: debug/host/porta controlados por ambiente — nunca hardcoded.
+    # Por padrão HOST=127.0.0.1: só este computador acessa, mesmo comportamento
+    # de sempre. Para expor na rede local usando este servidor de desenvolvimento
+    # (só para teste rápido — não recomendado para uso real), defina HOST=0.0.0.0
+    # no .env. Para rodar de verdade na rede, use "python serve.py" (Waitress)
+    # em vez de "python app.py" — ver PLANO-REDE.md / NOVIDADES.md.
+    app.run(
+        host=os.environ.get("HOST", "127.0.0.1"),
+        debug=app.config["DEBUG"],
+        port=int(os.environ.get("PORT", 5001)),
+    )

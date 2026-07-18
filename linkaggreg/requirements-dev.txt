@@ -1,0 +1,7 @@
+# NOVO: dependências extras só para desenvolvimento/testes (não instale em produção).
+# Uso:
+#   pip install -r requirements.txt
+#   pip install -r requirements-dev.txt
+#   pytest
+-r requirements.txt
+pytest==8.3.3

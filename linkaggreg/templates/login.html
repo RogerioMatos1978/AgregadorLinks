@@ -9,8 +9,8 @@
         <form method="post">
             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
 
-            <label for="email">E-mail</label>
-            <input type="email" name="email" id="email" required>
+            <label for="username">Usuário</label>
+            <input type="text" name="username" id="username" required autocomplete="username">
 
             <label for="password">Senha</label>
             <input type="password" name="password" id="password" required>
